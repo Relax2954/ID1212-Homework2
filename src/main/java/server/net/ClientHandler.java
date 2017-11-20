@@ -134,7 +134,6 @@ class ClientHandler implements Runnable {
                 switch (msg.msgType) {
                     case START:
                         String gameentry = msg.msgBody;
-                        ;
                         if (gameentry.toLowerCase().contains("game".toLowerCase())) {
                             chosenword = chooseWord();
                             remaining = chosenword.length();
