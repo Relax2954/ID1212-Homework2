@@ -14,12 +14,10 @@ import Protocol.common.Constants;
 import Protocol.common.MessageException;
 import Protocol.common.MsgType;
 import Protocol.common.MessageSplitter;
-import java.io.FileNotFoundException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import server.model.GameLogicC;
+import server.model.Scoring;
 
 /**
  *
@@ -28,7 +26,7 @@ import java.util.logging.Logger;
 /**
  * Handles all communication with one particular client.
  */
-class ClientHandler implements Runnable {
+public class ClientHandler implements Runnable {
 
     private static final String GUESS_DELIMETER = " ";
 
@@ -38,13 +36,18 @@ class ClientHandler implements Runnable {
     private final MessageSplitter msgSplitter = new MessageSplitter();
     private String guess = null;
     private boolean connected;
-    private Allwords myallwords;
-    private int score = 0; //the total current score;
-    private String chosenword;
-    private volatile String checkerString;   //SHOULD IT BE VOLATILE, MAYBE ATOMIC?  check private?
-    private volatile int remaining = 0;  //remaining shots to take
-    private char[] checker; //ovdje stavlja  capword cifru lokacije pogodjenog slova
     private String tempor; //this is for just printiing out the current ___f__c__
+    String chosenword;
+    String gamelogcheckerString;
+    GameLogicC gamelogiccc;
+    private volatile int score=0;
+    ByteBuffer BufferedTempor;
+    ByteBuffer BufferedScore;
+    ByteBuffer BuffCheckerString;
+    Scoring myscore;
+    
+          
+    
 
     /**
      * Creates a new instance, which will handle communication with one specific
@@ -54,65 +57,11 @@ class ClientHandler implements Runnable {
      * connected.
      */
     ClientHandler(TheServer server, SocketChannel clientChannel) {
+        myscore=new Scoring();
         this.server = server;
         this.clientChannel = clientChannel;
         connected = true;
 
-    }
-
-    public String chooseWord() throws FileNotFoundException { //this is choosing a word from words.txt
-
-        myallwords = new Allwords();
-        Random rand = new Random();
-        ArrayList<String> names = myallwords.getList();
-        String randomword = names.get(rand.nextInt(names.size()));
-        return randomword;
-    }
-
-    public String gamelogic(String theword, String myguess) { //this is where the game logic magic happens
-        if (theword == null) {
-            return "Please start the game before guessing";
-        }
-        String capguess = myguess.toLowerCase();
-        String capword = theword.toLowerCase();
-        char[] capwordarray = capword.toLowerCase().toCharArray();
-
-        if (remaining == 0) {
-            return "Please start a new game.";
-        } else if (capguess.length() != capword.length() && capguess.length() != 1) {
-            remaining--;
-            checkerString = String.valueOf(checker);
-            if (remaining == 0) {
-                score--;
-                return checkerString + "\nRemaining attempts: " + remaining + "\nYour total score is " + score;
-            }
-            return checkerString + "\nRemaining attempts: " + remaining;
-        } else if (capguess.equals(capword)) {
-            score++;
-            remaining = 0;
-            return capword + "\nYour total score is " + score;
-        } else if (!capword.contains(capguess)) {
-            remaining--;
-            checkerString = String.valueOf(checker);
-            if (remaining == 0) {
-                score--;
-                return checkerString + "\nRemaining attempts: " + remaining + "\nYour total score is " + score;
-            }
-            return checkerString + "\nRemaining attempts: " + remaining;
-        } else {
-            for (int i = 0; i < capword.length(); i++) {
-                if (capguess.charAt(0) == capwordarray[i]) {
-                    checker[i] = capguess.charAt(0);  //u ovom praznom array stavlja guess slova
-                }
-            }
-            checkerString = String.valueOf(checker);
-            if (!checkerString.contains("_")) {
-                score++;
-                remaining = 0;
-                return capword + "\nYour total score is " + score;
-            }
-            return checkerString + "\nRemaining attempts: " + remaining;
-        }
     }
 
     public ByteBuffer createBufferedMessage(String msg) {
@@ -135,12 +84,10 @@ class ClientHandler implements Runnable {
                     case START:
                         String gameentry = msg.msgBody;
                         if (gameentry.toLowerCase().contains("game".toLowerCase())) {
-                            chosenword = chooseWord();
-                            remaining = chosenword.length();
-                            checker = new char[chosenword.length()];
-                            Arrays.fill(checker, '_');
-                            checkerString = String.valueOf(checker);
-                            ByteBuffer BuffCheckerString = createBufferedMessage(checkerString+" "+ chosenword);
+                            gamelogiccc=new GameLogicC();
+                            chosenword=gamelogiccc.chosenword;
+                            gamelogcheckerString=gamelogiccc.checkerString;
+                            BuffCheckerString = createBufferedMessage(gamelogcheckerString+" "+ chosenword);
                             sendMsg(BuffCheckerString);
                         } else {
                             ByteBuffer BuffNotification = createBufferedMessage("Please start game or guess the word.");
@@ -149,9 +96,14 @@ class ClientHandler implements Runnable {
                         break;
                     case GUESS:
                         guess = msg.msgBody;
-                        tempor = gamelogic(chosenword, guess);
-                        ByteBuffer BufferedTempor = createBufferedMessage(tempor);
+                        tempor = gamelogiccc.gamelogic(chosenword, guess);
+                        BufferedTempor = createBufferedMessage(tempor);
                         sendMsg(BufferedTempor);
+                        if(gamelogiccc.score!=0){ //This if statement is here because I don't want to print out
+                        score=myscore.scoreincrement(gamelogiccc.score);// the score after each guess, only after increase
+                        BufferedScore = createBufferedMessage("Your total score is " +score);
+                        sendMsg(BufferedScore);
+                        }
                         break;
                     case WRONGINPUT:
                          ByteBuffer BufferedWronginput = createBufferedMessage("Please start game or guess the word.");
